@@ -1,0 +1,17 @@
+credentials:
+  usernames:
+    analyst_user:
+      email: fake_nsavvin@fake.com
+      name: Analyst User
+      password: $2b$12$27uxhx6VIPBAlt5bmbiY8uHCCxwYinZj8bNgSFg6xrxjjl0H7yEj6
+    admin_user:
+      email: fake_nsavvin@fake.com
+      name: Admin User
+      password: $2b$12$lpkcIeK7ZG68pQtkpjOMTeUH8HrtYtgsr3N0UtvXN1UJOsmToDQK.
+cookie:
+  expiry_days: 30
+  key: random_signature_key
+  name: random_cookie_name
+preauthorized:
+  emails:
+  - melsby@gmail.com
