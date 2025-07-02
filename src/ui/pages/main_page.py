@@ -11,7 +11,7 @@ import random
 import os
 from dotenv import load_dotenv
 load_dotenv()
-
+import json
 
 cwd = os.getcwd()
 path_to_avatar = os.path.join(cwd, "src", "ui", "logos", "single_logo.png")
@@ -47,34 +47,24 @@ def send_to_backend(session_id: str, chat_id: str, message: str = "", filename: 
     return {"message": "Ошибка при запросе к бэкенду"}
 
 
+def chat_data(session_id: str, chat_id: str):
+    base_url = os.getenv("CHAT_API", "http://0.0.0.0:7070")
+    url = f"{base_url}/chat_data"
+    payload = {
+        "session_id": session_id,
+        "chat_id": chat_id,
+    }
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        res_json = response.json()["response"]
+        return res_json
+    return {"message": "Ошибка при запросе к бэкенду"}
+
+
 
 def main():
     st.sidebar.image(path_to_logo)
-
-    # st.sidebar.markdown(
-    #     """
-    # 🚧 **Horizon AI сейчас в режиме отладки.**
-    #
-    # ---
-    #
-    # 🔜 Скоро он сможет:
-    #
-    #
-    # 📊 Работать с таблицами CSV и XLSX
-    #
-    #
-    # 📈 Прогнозировать временные ряды
-    #
-    #
-    # 🧠 Анализировать данные
-    #
-    #
-    # 📌 Рисовать информативные графики
-    #
-    #
-    # 🪄 Интерактивно работать в чате
-    # """
-    # )
+    st.session_state.was_input = None
 
     st.sidebar.markdown(
         """
@@ -95,6 +85,31 @@ def main():
     - Обеспечивать интерактивное взаимодействие в чате  
     """
     )
+
+    cols = st.columns(spec=[2,2,2])
+    with cols[2].popover("Твои данные", use_container_width=True):
+        session_id = '1234'
+        chat_id = '2345'
+        response = chat_data(
+            session_id=session_id,
+            chat_id=chat_id,
+        )
+
+        data = response["data"]
+        col_name, col_popover = st.columns(spec=[2.5, 1])
+
+        for dict in data:
+            name = dict["name"]
+            df = pd.DataFrame(dict["json_data"])
+            col_name.write(name)
+
+            with col_popover.popover("Показать"):
+                st.write(df)
+
+
+
+
+
     messages = st.container(height=650, border=False)
 
     if "chat_history" not in st.session_state:
@@ -103,12 +118,46 @@ def main():
         st.session_state.pending_input = None
 
     emojis = ["🗿", "🚀", "🛸", "🏂", "🤺",]
-    emoji = random.choice(emojis)
 
-    prompt = st.chat_input("Say something")
+
+    prompt = st.chat_input("Say something and/or attach an image", accept_file=True, file_type=["csv", "xlsx"])
+
+
+    # if prompt and not st.session_state.pending_input:
+    #     st.session_state.pending_input = prompt
 
     if prompt and not st.session_state.pending_input:
-        st.session_state.pending_input = prompt
+        st.session_state.was_input = True
+        if prompt.text == '':
+            st.session_state.pending_input = None
+
+        else:
+            st.session_state.pending_input = prompt.text
+        if prompt.files:
+            uploaded_file = prompt.files[0]
+        else:
+            uploaded_file = None
+
+        df = None
+        filename = None
+
+        if uploaded_file is not None:
+            filename = os.path.splitext(uploaded_file.name)[0]
+
+            if uploaded_file.name.endswith(".csv"):
+                df = pd.read_csv(uploaded_file)
+            elif uploaded_file.name.endswith((".xls", ".xlsx")):
+                df = pd.read_excel(uploaded_file)
+
+            # json_data = df.to_dict(orient="records")
+            json_data = json.loads(
+                json.dumps(df.to_dict(orient="records"), ensure_ascii=False)
+            )
+        else:
+            json_data = None
+
+        print(f"filename = {filename}")
+
 
     with messages:
         for role, content, df_data, html in st.session_state.chat_history:
@@ -120,8 +169,7 @@ def main():
                 if html:
                     components.html(html, height=500, scrolling=False)
 
-        # отрисовать новое сообщение пользователя + спиннер
-        if st.session_state.pending_input:
+        if st.session_state.was_input:
             with st.chat_message("user"):
                 st.write(st.session_state.pending_input)
 
@@ -136,8 +184,8 @@ def main():
                         session_id=session_id,
                         chat_id=chat_id,
                         message=user_input,
-                        filename=None,
-                        data_json=None
+                        filename=filename,
+                        data_json=json_data
                     )
                     st.session_state.chat_history.append(("user", user_input, None, None))
                     st.session_state.chat_history.append((
@@ -147,6 +195,7 @@ def main():
                         reply.get("chart_html")
                     ))
                     st.session_state.pending_input = None
+                    st.session_state.was_input = None
                     st.rerun()
 
 if __name__ == "__main__":
